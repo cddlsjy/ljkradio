@@ -60,7 +60,13 @@ class StationStorage(context: Context) {
      */
     fun removeStation(station: Station) {
         val stations = getStations().toMutableList()
-        stations.removeIf { it.id == station.id }
+        val iterator = stations.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().id == station.id) {
+                iterator.remove()
+                break
+            }
+        }
         saveStations(stations)
     }
 
@@ -69,7 +75,13 @@ class StationStorage(context: Context) {
      */
     fun removeStationById(stationId: String) {
         val stations = getStations().toMutableList()
-        stations.removeIf { it.id == stationId }
+        val iterator = stations.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().id == stationId) {
+                iterator.remove()
+                break
+            }
+        }
         saveStations(stations)
     }
 

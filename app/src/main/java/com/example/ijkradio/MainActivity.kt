@@ -406,5 +406,6 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
     override fun onBackPressed() {
         // 最小化应用而不是退出
         moveTaskToBack(true)
+        super.onBackPressed()
     }
 }

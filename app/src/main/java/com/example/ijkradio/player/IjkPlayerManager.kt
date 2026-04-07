@@ -72,7 +72,6 @@ class IjkPlayerManager private constructor(private val context: Context) {
         try {
             // 加载 IjkPlayer 原生库
             IjkMediaPlayer.loadLibrariesOnce(null)
-            IjkMediaPlayer.nativeProfileBegin("libijkplayer.so")
 
             // 创建播放器实例
             ijkPlayer = IjkMediaPlayer().apply {
@@ -92,9 +91,6 @@ class IjkPlayerManager private constructor(private val context: Context) {
      * 配置播放器参数
      */
     private fun IjkMediaPlayer.configurePlayer() {
-        // 设置日志级别为调试
-        IjkMediaPlayer.setLogLevel(IjkMediaPlayer.IJK_LOG_DEBUG)
-
         if (hardwareDecodeEnabled) {
             // 启用硬解码
             setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1)
@@ -109,19 +105,19 @@ class IjkPlayerManager private constructor(private val context: Context) {
         setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 1)
 
         // 缓冲大小（微秒），弱网时增加缓冲
-        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "max-buffer-size", BUFFER_SIZE)
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "max-buffer-size", BUFFER_SIZE.toLong())
 
         // 准备完成后自动开始播放
         setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", 1)
 
         // 错误恢复尝试次数
-        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "reconnect", RECONNECT_ATTEMPTS)
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "reconnect", RECONNECT_ATTEMPTS.toLong())
 
         // 启用快速定位（对于直播流很重要）
         setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "fflags", "fastseek")
 
         // 设置超时时间（微秒）
-        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "timeout", 30000000) // 30秒
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "timeout", 30000000L) // 30秒
 
         // 无限缓冲（直播流推荐）
         setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "infbuf", 1)
@@ -149,8 +145,8 @@ class IjkPlayerManager private constructor(private val context: Context) {
         try {
             ijkPlayer?.let { player ->
                 player.reset()
-                configurePlayer()
-                setupListeners()
+                player.configurePlayer()
+                player.setupListeners()
                 player.dataSource = station.url
                 player.prepareAsync()
             }
