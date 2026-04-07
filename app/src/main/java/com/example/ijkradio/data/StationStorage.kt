@@ -162,29 +162,74 @@ class StationStorage(context: Context) {
     private fun getDefaultStations(): List<Station> {
         return listOf(
             Station(
-                name = "BBC World Service",
-                url = "http://stream.live.vc.bbcmedia.co.uk/bbc_world_service",
-                description = "BBC 国际广播"
+                name = "湖南交通广播",
+                url = "http://a.live.hnradio.com/jtpd/radio120k_jtpd.m3u8?auth_key=1588751155-0-0-301d7e28868eff70a72edf5e4569b546",
+                description = "湖南交通广播"
             ),
             Station(
-                name = "Radio Paradise Main Mix",
-                url = "http://stream.radioparadise.com/mp3-192",
-                description = "Radio Paradise 主频道"
+                name = "CNR-1-中国之声",
+                url = "http://ngcdn001.cnr.cn/live/zgzs/index.m3u8",
+                description = "CNR-1-中国之声"
             ),
             Station(
-                name = "SomaFM Groove Salad",
-                url = "http://ice2.somafm.com/groovesalad-128-mp3",
-                description = "SomaFM 氛围音乐"
+                name = "CNR-15 中国交通广播",
+                url = "https://ngcdn002.cnr.cn/live/gsgljtgb/index.m3u8",
+                description = "CNR-15 中国交通广播"
             ),
             Station(
-                name = "Jazz24",
-                url = "https://live.amperwave.net/direct/ppm-jazz24mp3-ibc1",
-                description = "爵士乐24小时"
+                name = "CMG环球资讯广播",
+                url = "https://sk.cri.cn/905.m3u8",
+                description = "CMG环球资讯广播"
             ),
             Station(
-                name = "Classic FM",
-                url = "http://media-ice.musicradio.com/ClassicFMMP3",
-                description = "经典音乐"
+                name = "CNR-2 经济之声",
+                url = "http://ngcdn002.cnr.cn/live/jjzs/index.m3u8",
+                description = "CNR-2 经济之声"
+            ),
+            Station(
+                name = "AsiaFM高清音乐台",
+                url = "http://asiafm.hk:8000/asiahd",
+                description = "AsiaFM高清音乐台"
+            ),
+            Station(
+                name = "AsiaFM 亚洲热歌台【2023.10.17】",
+                url = "http://hot.asiafm.net:8000/asiafm",
+                description = "AsiaFM 亚洲热歌台"
+            ),
+            Station(
+                name = "AsiaFM亚洲经典台",
+                url = "http://goldfm.cn:8000/goldfm",
+                description = "AsiaFM亚洲经典台"
+            ),
+            Station(
+                name = "AsiaFM 亚洲音乐台【2023.10.18】",
+                url = "http://asiafm.hk:8000/asiafm",
+                description = "AsiaFM 亚洲音乐台"
+            ),
+            Station(
+                name = "深圳交通广播",
+                url = "http://lhttp.qingting.fm/live/1272/64k.mp3",
+                description = "深圳交通广播"
+            ),
+            Station(
+                name = "上海交通广播",
+                url = "http://lhttp.qingting.fm/live/266/64k.mp3",
+                description = "上海交通广播"
+            ),
+            Station(
+                name = "青岛交通广播",
+                url = "http://lhttp.qingting.fm/live/1676/64k.mp3",
+                description = "青岛交通广播"
+            ),
+            Station(
+                name = "北京交通广播",
+                url = "https://lhttp.qingting.fm/live/336/64k.mp3",
+                description = "北京交通广播"
+            ),
+            Station(
+                name = "常德交通广播",
+                url = "https://lhttp.qingting.fm/live/15318209/64k.mp3",
+                description = "常德交通广播"
             )
         )
     }

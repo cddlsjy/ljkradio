@@ -56,8 +56,8 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
         Log.d(TAG, "onCreate: Initializing activity")
 
         // 初始化组件
-        initViews()
         initStorage()
+        initViews()
         initPlayer()
         initNetwork()
         initRecyclerView()
