@@ -1,0 +1,372 @@
+package com.example.ijkradio.player
+
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import com.example.ijkradio.data.Station
+import com.example.ijkradio.ui.PlaybackState
+import tv.danmaku.ijk.media.player.IjkMediaPlayer
+import tv.danmaku.ijk.media.player.IMediaPlayer
+import tv.danmaku.ijk.media.player.misc.ITrackInfo
+
+/**
+ * IjkPlayer 播放器管理器单例类
+ * 负责管理 IjkMediaPlayer 的生命周期和播放控制
+ */
+class IjkPlayerManager private constructor(private val context: Context) {
+
+    companion object {
+        private const val TAG = "IjkPlayerManager"
+        private const val BUFFER_SIZE = 1024 * 1024 // 1MB buffer
+        private const val RECONNECT_ATTEMPTS = 5
+
+        @Volatile
+        private var instance: IjkPlayerManager? = null
+
+        fun getInstance(context: Context): IjkPlayerManager {
+            return instance ?: synchronized(this) {
+                instance ?: IjkPlayerManager(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
+    // 播放器实例
+    private var ijkPlayer: IjkMediaPlayer? = null
+
+    // 当前播放的电台
+    private var currentStation: Station? = null
+
+    // 播放状态
+    private val _playbackState = MutableLiveData<PlaybackState>(PlaybackState.Stopped)
+    val playbackState: LiveData<PlaybackState> = _playbackState
+
+    // 播放进度（用于音频可视化）
+    private val _playbackPosition = MutableLiveData<Long>(0L)
+    val playbackPosition: LiveData<Long> = _playbackPosition
+
+    // Handler 用于定时更新
+    private val handler = Handler(Looper.getMainLooper())
+    private var positionUpdateRunnable: Runnable? = null
+
+    // 是否已初始化
+    private var isInitialized = false
+
+    // 音量 (0.0 - 1.0)
+    private var currentVolume = 1.0f
+
+    // 硬解码开关
+    private var hardwareDecodeEnabled = true
+
+    /**
+     * 初始化播放器
+     */
+    fun initialize() {
+        if (isInitialized) {
+            Log.d(TAG, "Player already initialized")
+            return
+        }
+
+        try {
+            // 加载 IjkPlayer 原生库
+            IjkMediaPlayer.loadLibrariesOnce(null)
+            IjkMediaPlayer.nativeProfileBegin("libijkplayer.so")
+
+            // 创建播放器实例
+            ijkPlayer = IjkMediaPlayer().apply {
+                configurePlayer()
+                setupListeners()
+            }
+
+            isInitialized = true
+            Log.d(TAG, "Player initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize player", e)
+            _playbackState.postValue(PlaybackState.Error("播放器初始化失败: ${e.message}"))
+        }
+    }
+
+    /**
+     * 配置播放器参数
+     */
+    private fun IjkMediaPlayer.configurePlayer() {
+        // 设置日志级别为调试
+        IjkMediaPlayer.setLogLevel(IjkMediaPlayer.IJK_LOG_DEBUG)
+
+        if (hardwareDecodeEnabled) {
+            // 启用硬解码
+            setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1)
+            setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", 1)
+            setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-handle-resolution-change", 1)
+        } else {
+            // 禁用硬解码，使用软解
+            setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 0)
+        }
+
+        // 音频输出使用 OpenSL ES
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 1)
+
+        // 缓冲大小（微秒），弱网时增加缓冲
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "max-buffer-size", BUFFER_SIZE)
+
+        // 准备完成后自动开始播放
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", 1)
+
+        // 错误恢复尝试次数
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "reconnect", RECONNECT_ATTEMPTS)
+
+        // 启用快速定位（对于直播流很重要）
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "fflags", "fastseek")
+
+        // 设置超时时间（微秒）
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "timeout", 30000000) // 30秒
+
+        // 无限缓冲（直播流推荐）
+        setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "infbuf", 1)
+    }
+
+    /**
+     * 设置播放器监听器
+     */
+    private fun IjkMediaPlayer.setupListeners() {
+        setOnPreparedListener(OnPreparedListenerImpl())
+        setOnErrorListener(OnErrorListenerImpl())
+        setOnCompletionListener(OnCompletionListenerImpl())
+        setOnInfoListener(OnInfoListenerImpl())
+        setOnBufferingUpdateListener(OnBufferingUpdateListenerImpl())
+    }
+
+    /**
+     * 播放电台
+     */
+    fun playStation(station: Station) {
+        Log.d(TAG, "Playing station: ${station.name}, URL: ${station.url}")
+        currentStation = station
+        _playbackState.postValue(PlaybackState.Buffering)
+
+        try {
+            ijkPlayer?.let { player ->
+                player.reset()
+                configurePlayer()
+                setupListeners()
+                player.dataSource = station.url
+                player.prepareAsync()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing station", e)
+            _playbackState.postValue(PlaybackState.Error("播放失败: ${e.message}"))
+        }
+    }
+
+    /**
+     * 暂停播放
+     */
+    fun pause() {
+        try {
+            ijkPlayer?.let { player ->
+                if (player.isPlaying) {
+                    player.pause()
+                    _playbackState.postValue(PlaybackState.Paused)
+                    stopPositionUpdates()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pausing playback", e)
+        }
+    }
+
+    /**
+     * 恢复播放
+     */
+    fun resume() {
+        try {
+            ijkPlayer?.let { player ->
+                player.start()
+                currentStation?.let { station ->
+                    _playbackState.postValue(PlaybackState.Playing(station.name))
+                }
+                startPositionUpdates()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resuming playback", e)
+        }
+    }
+
+    /**
+     * 停止播放
+     */
+    fun stop() {
+        try {
+            stopPositionUpdates()
+            ijkPlayer?.stop()
+            _playbackState.postValue(PlaybackState.Stopped)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping playback", e)
+        }
+    }
+
+    /**
+     * 设置音量
+     * @param volume 音量值 (0.0 - 1.0)
+     */
+    fun setVolume(volume: Float) {
+        currentVolume = volume.coerceIn(0f, 1f)
+        try {
+            ijkPlayer?.setVolume(currentVolume, currentVolume)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting volume", e)
+        }
+    }
+
+    /**
+     * 获取当前音量
+     */
+    fun getVolume(): Float = currentVolume
+
+    /**
+     * 设置硬解码开关
+     */
+    fun setHardwareDecode(enabled: Boolean) {
+        hardwareDecodeEnabled = enabled
+        if (isInitialized) {
+            ijkPlayer?.let { player ->
+                if (hardwareDecodeEnabled) {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1)
+                } else {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 0)
+                }
+            }
+        }
+    }
+
+    /**
+     * 是否正在播放
+     */
+    fun isPlaying(): Boolean {
+        return ijkPlayer?.isPlaying == true
+    }
+
+    /**
+     * 获取当前播放的电台
+     */
+    fun getCurrentStation(): Station? = currentStation
+
+    /**
+     * 释放播放器资源
+     */
+    fun release() {
+        stopPositionUpdates()
+        try {
+            ijkPlayer?.release()
+            ijkPlayer = null
+            isInitialized = false
+            currentStation = null
+            _playbackState.postValue(PlaybackState.Stopped)
+            Log.d(TAG, "Player released")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing player", e)
+        }
+    }
+
+    /**
+     * 开始位置更新
+     */
+    private fun startPositionUpdates() {
+        stopPositionUpdates()
+        positionUpdateRunnable = object : Runnable {
+            override fun run() {
+                ijkPlayer?.let { player ->
+                    try {
+                        _playbackPosition.postValue(player.currentPosition)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error getting position", e)
+                    }
+                }
+                handler.postDelayed(this, 1000) // 每秒更新一次
+            }
+        }
+        positionUpdateRunnable?.let { handler.post(it) }
+    }
+
+    /**
+     * 停止位置更新
+     */
+    private fun stopPositionUpdates() {
+        positionUpdateRunnable?.let { handler.removeCallbacks(it) }
+        positionUpdateRunnable = null
+    }
+
+    // ==================== 内部监听器实现 ====================
+
+    private inner class OnPreparedListenerImpl : IMediaPlayer.OnPreparedListener {
+        override fun onPrepared(mp: IMediaPlayer?) {
+            Log.d(TAG, "Media prepared")
+            mp?.let { player ->
+                player.setVolume(currentVolume, currentVolume)
+                player.start()
+                currentStation?.let { station ->
+                    _playbackState.postValue(PlaybackState.Playing(station.name))
+                }
+                startPositionUpdates()
+            }
+        }
+    }
+
+    private inner class OnErrorListenerImpl : IMediaPlayer.OnErrorListener {
+        override fun onError(mp: IMediaPlayer?, what: Int, extra: Int): Boolean {
+            val errorMsg = when (what) {
+                IMediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK ->
+                    "视频内容无效"
+                IMediaPlayer.MEDIA_ERROR_UNKNOWN ->
+                    "未知错误: what=$what, extra=$extra"
+                else -> "播放错误: what=$what, extra=$extra"
+            }
+            Log.e(TAG, "Playback error: $errorMsg")
+            _playbackState.postValue(PlaybackState.Error(errorMsg))
+            stopPositionUpdates()
+            return true // 错误已处理
+        }
+    }
+
+    private inner class OnCompletionListenerImpl : IMediaPlayer.OnCompletionListener {
+        override fun onCompletion(mp: IMediaPlayer?) {
+            Log.d(TAG, "Playback completed")
+            _playbackState.postValue(PlaybackState.Stopped)
+            stopPositionUpdates()
+        }
+    }
+
+    private inner class OnInfoListenerImpl : IMediaPlayer.OnInfoListener {
+        override fun onInfo(mp: IMediaPlayer?, what: Int, extra: Int): Boolean {
+            when (what) {
+                IMediaPlayer.MEDIA_INFO_BUFFERING_START -> {
+                    Log.d(TAG, "Buffering started")
+                    _playbackState.postValue(PlaybackState.Buffering)
+                }
+                IMediaPlayer.MEDIA_INFO_BUFFERING_END -> {
+                    Log.d(TAG, "Buffering ended")
+                    currentStation?.let { station ->
+                        _playbackState.postValue(PlaybackState.Playing(station.name))
+                    }
+                }
+                IMediaPlayer.MEDIA_INFO_NETWORK_BANDWIDTH -> {
+                    Log.d(TAG, "Network bandwidth: $extra")
+                }
+                IMediaPlayer.MEDIA_INFO_AUDIO_RENDERING_START -> {
+                    Log.d(TAG, "Audio rendering started")
+                }
+            }
+            return false
+        }
+    }
+
+    private inner class OnBufferingUpdateListenerImpl : IMediaPlayer.OnBufferingUpdateListener {
+        override fun onBufferingUpdate(mp: IMediaPlayer?, percent: Int) {
+            if (percent in 1..99) {
+                Log.d(TAG, "Buffering: $percent%")
+            }
+        }
+    }
+}
