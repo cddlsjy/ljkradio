@@ -88,6 +88,22 @@ class StationAdapter(
         notifyDataSetChanged()
     }
 
+    /**
+     * 获取当前选中的电台
+     */
+    fun getSelectedStation(): Station? {
+        return selectedStationId?.let { id ->
+            currentList.find { it.id == id }
+        }
+    }
+
+    /**
+     * 获取指定位置的电台
+     */
+    fun getItemAt(position: Int): Station? {
+        return if (position in 0 until itemCount) getItem(position) else null
+    }
+
     inner class StationViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val nameTextView: TextView = itemView.findViewById(R.id.station_name)
         private val descriptionTextView: TextView = itemView.findViewById(R.id.station_description)

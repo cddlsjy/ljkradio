@@ -45,4 +45,7 @@
 
     <!-- 空状态 -->
     <string name="empty_stations">暂无电台\n点击右下角按钮添加</string>
+
+    <!-- 设置 -->
+    <string name="settings">设置</string>
 </resources>

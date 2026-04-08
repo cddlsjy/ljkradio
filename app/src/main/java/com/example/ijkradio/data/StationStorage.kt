@@ -2,6 +2,7 @@ package com.example.ijkradio.data
 
 import android.content.Context
 import android.content.SharedPreferences
+
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -9,7 +10,7 @@ import com.google.gson.reflect.TypeToken
  * 电台存储管理器
  * 使用 SharedPreferences 存储电台列表和播放状态
  */
-class StationStorage(context: Context) {
+class StationStorage(private val context: Context) {
 
     companion object {
         private const val PREFS_NAME = "ijk_radio_prefs"
@@ -34,13 +35,21 @@ class StationStorage(context: Context) {
      * 获取电台列表
      */
     fun getStations(): List<Station> {
-        val json = prefs.getString(KEY_STATIONS, null) ?: return getDefaultStations()
-        return try {
-            val type = object : TypeToken<List<Station>>() {}.type
-            gson.fromJson(json, type) ?: getDefaultStations()
-        } catch (e: Exception) {
-            getDefaultStations()
+        val json = prefs.getString(KEY_STATIONS, null)
+        val stations = if (json != null) {
+            try {
+                val type = object : TypeToken<List<Station>>() {}.type
+                gson.fromJson(json, type) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else {
+            // 首次运行：使用默认电台列表
+            val defaultStations = getDefaultStations()
+            saveStations(defaultStations)
+            defaultStations
         }
+        return stations
     }
 
     /**

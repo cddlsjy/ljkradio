@@ -14,7 +14,6 @@ import com.example.ijkradio.data.StationStorage
 import com.example.ijkradio.player.IjkPlayerManager
 import com.example.ijkradio.ui.PlaybackState
 import com.example.ijkradio.ui.StationAdapter
-import com.example.ijkradio.utils.NetworkHelper
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.slider.Slider
 
@@ -22,7 +21,7 @@ import com.google.android.material.slider.Slider
  * 主界面Activity
  * 管理电台列表、播放器控制和UI交互
  */
-class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
+class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
@@ -31,11 +30,11 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
     // UI组件
     private lateinit var recyclerView: RecyclerView
     private lateinit var playPauseButton: FloatingActionButton
+    private lateinit var settingsButton: ImageButton
     private lateinit var statusTextView: TextView
+    private lateinit var emptyView: TextView
     private lateinit var volumeSlider: Slider
     private lateinit var volumeIcon: ImageView
-    private lateinit var networkStatusView: TextView
-    private lateinit var emptyView: TextView
 
     // 适配器
     private lateinit var stationAdapter: StationAdapter
@@ -43,11 +42,11 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
     // 数据和播放器
     private lateinit var stationStorage: StationStorage
     private lateinit var playerManager: IjkPlayerManager
-    private lateinit var networkHelper: NetworkHelper
 
     // 电台列表
     private var stations: MutableList<Station> = mutableListOf()
     private var selectedStation: Station? = null
+    private var autoPlayEnabled = true   // 遥控器移动焦点时自动播放
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,7 +58,6 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
         initStorage()
         initViews()
         initPlayer()
-        initNetwork()
         initRecyclerView()
         setupListeners()
 
@@ -76,18 +74,9 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
     private fun initViews() {
         recyclerView = findViewById(R.id.stations_recycler_view)
         playPauseButton = findViewById(R.id.play_pause_button)
+        settingsButton = findViewById(R.id.settings_button)
         statusTextView = findViewById(R.id.status_text_view)
-        volumeSlider = findViewById(R.id.volume_slider)
-        volumeIcon = findViewById(R.id.volume_icon)
-        networkStatusView = findViewById(R.id.network_status_view)
         emptyView = findViewById(R.id.empty_view)
-
-        // 设置音量滑块范围
-        volumeSlider.valueFrom = 0f
-        volumeSlider.valueTo = 1f
-
-        // 恢复保存的音量
-        volumeSlider.value = stationStorage.getVolume()
     }
 
     /**
@@ -106,17 +95,6 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
 
         // 设置保存的音量
         playerManager.setVolume(stationStorage.getVolume())
-        volumeSlider.value = stationStorage.getVolume()
-    }
-
-    /**
-     * 初始化网络监听
-     */
-    private fun initNetwork() {
-        networkHelper = NetworkHelper(this)
-        networkHelper.setNetworkStateListener(this)
-        networkHelper.startListening()
-        updateNetworkStatus()
     }
 
     /**
@@ -132,6 +110,9 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = stationAdapter
             setHasFixedSize(true)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            requestFocus()
         }
     }
 
@@ -144,23 +125,19 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
             togglePlayPause()
         }
 
-        // 音量滑块
-        volumeSlider.addOnChangeListener { _, value, fromUser ->
-            if (fromUser) {
-                playerManager.setVolume(value)
-                stationStorage.saveVolume(value)
-                updateVolumeIcon(value)
-            }
-        }
-
         // 添加电台按钮
         findViewById<FloatingActionButton>(R.id.add_station_button).setOnClickListener {
             showAddStationDialog()
         }
 
+        // 设置按钮
+        settingsButton.setOnClickListener {
+            showSettingsDialog()
+        }
+
         // 监听播放器状态
-        playerManager.playbackState.observe(this) { state ->
-            updatePlaybackUI(state)
+        playerManager.playbackState.observe(this) {
+            updatePlaybackUI(it)
         }
     }
 
@@ -332,27 +309,6 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
     }
 
     /**
-     * 更新音量图标
-     */
-    private fun updateVolumeIcon(volume: Float) {
-        val iconRes = when {
-            volume <= 0f -> R.drawable.ic_volume_off
-            volume < 0.5f -> R.drawable.ic_volume_down
-            else -> R.drawable.ic_volume_up
-        }
-        volumeIcon.setImageResource(iconRes)
-    }
-
-    /**
-     * 更新网络状态显示
-     */
-    private fun updateNetworkStatus() {
-        val networkType = networkHelper.getNetworkTypeDescription()
-        networkStatusView.text = getString(R.string.network_status, networkType)
-        networkStatusView.visibility = View.VISIBLE
-    }
-
-    /**
      * 更新空状态视图
      */
     private fun updateEmptyView() {
@@ -365,28 +321,11 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
         }
     }
 
-    // ==================== 网络状态回调 ====================
-
-    override fun onNetworkAvailable() {
-        runOnUiThread {
-            updateNetworkStatus()
-            Toast.makeText(this, R.string.network_available, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    override fun onNetworkLost() {
-        runOnUiThread {
-            updateNetworkStatus()
-            Toast.makeText(this, R.string.network_lost, Toast.LENGTH_LONG).show()
-        }
-    }
-
     // ==================== 生命周期管理 ====================
 
     override fun onPause() {
         super.onPause()
         // 保存当前状态
-        stationStorage.saveVolume(volumeSlider.value)
         playerManager.getCurrentStation()?.let {
             stationStorage.saveLastPlayed(it)
         }
@@ -394,13 +333,122 @@ class MainActivity : AppCompatActivity(), NetworkHelper.NetworkStateListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 停止网络监听
-        networkHelper.stopListening()
-
         // 释放播放器资源
         if (::playerManager.isInitialized) {
             playerManager.release()
         }
+    }
+
+    /**
+     * 显示设置对话框
+     */
+    private fun showSettingsDialog() {
+        val dialogView = LayoutInflater.from(this)
+            .inflate(R.layout.dialog_settings, null)
+
+        volumeSlider = dialogView.findViewById<Slider>(R.id.volume_slider)
+        volumeIcon = dialogView.findViewById<ImageView>(R.id.volume_icon)
+        val radioHardware = dialogView.findViewById<RadioButton>(R.id.radio_hardware)
+        val radioSoftware = dialogView.findViewById<RadioButton>(R.id.radio_software)
+        val autoPlaySwitch = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.auto_play_switch)
+
+        // 初始化音量滑块
+        volumeSlider.value = stationStorage.getVolume()
+        updateVolumeIcon(stationStorage.getVolume())
+
+        // 初始化解码方式，默认打开软解码
+        radioSoftware.isChecked = true
+        playerManager.setHardwareDecode(false)
+
+        // 初始化自动播放开关
+        autoPlaySwitch.isChecked = autoPlayEnabled
+
+        // 音量滑块监听器
+        volumeSlider.addOnChangeListener { slider: Slider, value: Float, fromUser: Boolean ->
+            if (fromUser) {
+                playerManager.setVolume(value)
+                stationStorage.saveVolume(value)
+                updateVolumeIcon(value)
+            }
+        }
+
+        // 自动播放开关监听器
+        autoPlaySwitch.setOnCheckedChangeListener { _, isChecked ->
+            autoPlayEnabled = isChecked
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("设置")
+            .setView(dialogView)
+            .setPositiveButton("确定") { _, _ ->
+                // 保存解码方式设置
+                val useHardwareDecode = radioHardware.isChecked
+                playerManager.setHardwareDecode(useHardwareDecode)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /**
+     * 更新音量图标
+     */
+    private fun updateVolumeIcon(volume: Float) {
+        val iconRes = when {
+            volume <= 0f -> R.drawable.ic_volume_off
+            volume < 0.5f -> R.drawable.ic_volume_down
+            else -> R.drawable.ic_volume_up
+        }
+        volumeIcon.setImageResource(iconRes)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        when (keyCode) {
+            android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                moveSelection(-1)
+                return true
+            }
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                moveSelection(1)
+                return true
+            }
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> {
+                selectedStation?.let {
+                    if (playerManager.isPlaying() && playerManager.getCurrentStation()?.id == it.id) {
+                        playerManager.pause()
+                    } else {
+                        playStationAndUpdateUI(it)
+                    }
+                }
+                return true
+            }
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                togglePlayPause()
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun moveSelection(delta: Int) {
+        val currentPos = getSelectedPosition()
+        val newPos = currentPos + delta
+        if (newPos in 0 until stationAdapter.itemCount) {
+            val station = stationAdapter.getItemAt(newPos)
+            stationAdapter.setSelectedStation(station)
+            recyclerView.smoothScrollToPosition(newPos)
+            if (autoPlayEnabled && station != null) {
+                playStationAndUpdateUI(station)
+            }
+        }
+    }
+
+    private fun getSelectedPosition(): Int {
+        val selected = stationAdapter.getSelectedStation() ?: return 0
+        return stations.indexOfFirst { it.id == selected.id }.coerceAtLeast(0)
+    }
+
+    private fun playStationAndUpdateUI(station: Station) {
+        onStationClicked(station)
     }
 
     override fun onBackPressed() {

@@ -147,6 +147,35 @@ class IjkPlayerManager private constructor(private val context: Context) {
                 player.reset()
                 player.configurePlayer()
                 player.setupListeners()
+
+                // 为所有电台添加通用 HTTP 头，模拟浏览器请求
+                player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "user_agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                
+                // 为央广/环球资讯添加特殊 HTTP 头
+                if (station.url.contains("cri.cn") || station.url.contains("sk.cri.cn")) {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "referer",
+                        "https://sk.cri.cn/")
+                }
+                
+                // 为其他电台添加适当的 referer
+                else if (station.url.contains("hnradio.com")) {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "referer",
+                        "http://a.live.hnradio.com/")
+                }
+                else if (station.url.contains("cnr.cn")) {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "referer",
+                        "http://ngcdn001.cnr.cn/")
+                }
+                else if (station.url.contains("asiafm.hk") || station.url.contains("asiafm.net") || station.url.contains("goldfm.cn")) {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "referer",
+                        "http://asiafm.hk/")
+                }
+                else if (station.url.contains("qingting.fm")) {
+                    player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "referer",
+                        "https://www.qingting.fm/")
+                }
+
                 player.dataSource = station.url
                 player.prepareAsync()
             }
@@ -235,6 +264,13 @@ class IjkPlayerManager private constructor(private val context: Context) {
                 }
             }
         }
+    }
+
+    /**
+     * 获取硬解码开关状态
+     */
+    fun isHardwareDecodeEnabled(): Boolean {
+        return hardwareDecodeEnabled
     }
 
     /**
