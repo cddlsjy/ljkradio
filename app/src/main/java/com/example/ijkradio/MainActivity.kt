@@ -9,6 +9,7 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.ItemTouchHelper
 import com.example.ijkradio.data.Station
 import com.example.ijkradio.data.StationStorage
 import com.example.ijkradio.player.IjkPlayerManager
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var stations: MutableList<Station> = mutableListOf()
     private var selectedStation: Station? = null
     private var autoPlayEnabled = true   // 遥控器移动焦点时自动播放
+    private var autoPlayLastStationEnabled = true   // 自动播放上一次播放的电台
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,6 +116,22 @@ class MainActivity : AppCompatActivity() {
             isFocusableInTouchMode = true
             requestFocus()
         }
+
+        // 添加左滑删除功能
+        val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT) {
+            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.adapterPosition
+                val station = stationAdapter.getItemAt(position)
+                if (station != null) {
+                    showDeleteDialog(station)
+                }
+            }
+        })
+        itemTouchHelper.attachToRecyclerView(recyclerView)
     }
 
     /**
@@ -126,7 +144,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 添加电台按钮
-        findViewById<FloatingActionButton>(R.id.add_station_button).setOnClickListener {
+        findViewById<ImageButton>(R.id.add_station_button).setOnClickListener {
             showAddStationDialog()
         }
 
@@ -158,6 +176,10 @@ class MainActivity : AppCompatActivity() {
         if (lastPlayed != null) {
             selectedStation = lastPlayed
             stationAdapter.setSelectedStation(lastPlayed)
+            // 如果启用了自动播放上一次电台，则自动播放
+            if (autoPlayLastStationEnabled) {
+                playerManager.playStation(lastPlayed)
+            }
         }
     }
 
@@ -351,6 +373,7 @@ class MainActivity : AppCompatActivity() {
         val radioHardware = dialogView.findViewById<RadioButton>(R.id.radio_hardware)
         val radioSoftware = dialogView.findViewById<RadioButton>(R.id.radio_software)
         val autoPlaySwitch = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.auto_play_switch)
+        val autoPlayLastStationSwitch = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.auto_play_last_station_switch)
 
         // 初始化音量滑块
         volumeSlider.value = stationStorage.getVolume()
@@ -362,6 +385,9 @@ class MainActivity : AppCompatActivity() {
 
         // 初始化自动播放开关
         autoPlaySwitch.isChecked = autoPlayEnabled
+        
+        // 初始化自动播放上一次电台开关
+        autoPlayLastStationSwitch.isChecked = autoPlayLastStationEnabled
 
         // 音量滑块监听器
         volumeSlider.addOnChangeListener { slider: Slider, value: Float, fromUser: Boolean ->
@@ -377,7 +403,12 @@ class MainActivity : AppCompatActivity() {
             autoPlayEnabled = isChecked
         }
 
-        AlertDialog.Builder(this)
+        // 自动播放上一次电台开关监听器
+        autoPlayLastStationSwitch.setOnCheckedChangeListener { _, isChecked ->
+            autoPlayLastStationEnabled = isChecked
+        }
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle("设置")
             .setView(dialogView)
             .setPositiveButton("确定") { _, _ ->
@@ -386,7 +417,15 @@ class MainActivity : AppCompatActivity() {
                 playerManager.setHardwareDecode(useHardwareDecode)
             }
             .setNegativeButton("取消", null)
-            .show()
+            .create()
+        
+        // 设置按钮颜色
+        dialog.setOnShowListener { 
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(resources.getColor(R.color.colorPrimary))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(resources.getColor(R.color.colorPrimary))
+        }
+        
+        dialog.show()
     }
 
     /**
@@ -430,15 +469,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun moveSelection(delta: Int) {
-        val currentPos = getSelectedPosition()
-        val newPos = currentPos + delta
-        if (newPos in 0 until stationAdapter.itemCount) {
-            val station = stationAdapter.getItemAt(newPos)
-            stationAdapter.setSelectedStation(station)
-            recyclerView.smoothScrollToPosition(newPos)
-            if (autoPlayEnabled && station != null) {
-                playStationAndUpdateUI(station)
-            }
+        val count = stationAdapter.itemCount
+        if (count == 0) return
+
+        // 获取当前选中位置，若无选中则根据方向决定起始位置
+        val currentPos = if (selectedStation == null) {
+            if (delta > 0) -1 else count  // 使下方模运算得到正确边界
+        } else {
+            stations.indexOfFirst { it.id == selectedStation?.id }.coerceAtLeast(0)
+        }
+
+        // 循环计算新位置
+        val newPos = ((currentPos + delta) % count + count) % count
+        val station = stationAdapter.getItemAt(newPos)
+        stationAdapter.setSelectedStation(station)
+        recyclerView.smoothScrollToPosition(newPos)
+        if (autoPlayEnabled && station != null) {
+            playStationAndUpdateUI(station)
         }
     }
 

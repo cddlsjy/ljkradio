@@ -62,6 +62,16 @@
                 app:tint="@color/colorPrimary"
                 android:background="?attr/selectableItemBackgroundBorderless" />
 
+            <!-- 添加电台按钮 -->
+            <ImageButton
+                android:id="@+id/add_station_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@string/add_station"
+                android:src="@drawable/ic_add"
+                app:tint="@color/colorPrimary"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
             <!-- 状态文本 -->
             <TextView
                 android:id="@+id/status_text_view"
@@ -89,18 +99,6 @@
 
     </LinearLayout>
 
-    <!-- 添加电台按钮 -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/add_station_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="280dp"
-        android:contentDescription="@string/add_station"
-        android:src="@drawable/ic_add"
-        app:backgroundTint="@color/colorSecondary"
-        app:fabSize="mini"
-        app:tint="@android:color/white" />
+
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

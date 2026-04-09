@@ -107,7 +107,6 @@ class StationAdapter(
     inner class StationViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val nameTextView: TextView = itemView.findViewById(R.id.station_name)
         private val descriptionTextView: TextView = itemView.findViewById(R.id.station_description)
-        private val deleteButton: ImageButton = itemView.findViewById(R.id.delete_button)
         private val playingIndicator: View = itemView.findViewById(R.id.playing_indicator)
 
         fun bind(station: Station, isSelected: Boolean, isPlaying: Boolean) {
@@ -134,11 +133,6 @@ class StationAdapter(
             // 点击事件
             itemView.setOnClickListener {
                 onStationClick(station)
-            }
-
-            // 删除按钮事件
-            deleteButton.setOnClickListener {
-                onDeleteClick(station)
             }
         }
     }
