@@ -1,33 +1,37 @@
 version: '1.0'
-name: ljkradiosdk19 Pipeline # 流水线名称
-stages:
-  - stage: 
-      name: build_stage
-      displayName: 构建阶段
-      steps:
-        # 使用 build@shell 绕过 Gitee 的 Gradle 插件 bug
-        - step: build@shell
-          name: build_gradle
-          displayName: 执行 Gradle 构建
-          # 选择合适的 JDK 版本，Android 项目一般用 8 或 11
-          jdkVersion: 17# 或者 '11'，根据你的项目配置调整
-          
-          commands:
-            # 1. 给脚本授权
-            - chmod +x ./gradlew
-            
-            # 2. 执行构建，屏蔽 Gitee 干扰
-            #    如果是 Android 项目，通常是 assembleDebug 或 assembleRelease
-            - ./gradlew assembleDebug --no-daemon --no-init-script
-            
-            # 3. （可选）列出生成的 APK 文件位置，方便确认构建结果
-            - ls -la app/build/outputs/apk/debug/
 
-          # （可选）如果需要上传产物，可以在这里配置 artifacts
-          artifacts:
-            - name: android-apk
-              paths:
-                - app/build/outputs/apk/debug/*.apk
-
-# 注意：Gitee 不支持 GitHub Actions 那样的 jobs, runs-on, uses 等语法
-# 所有的配置都必须遵循上面的 stages -> stage -> steps -> step 结构
+pipeline:
+  build:
+    name: Build Android APK
+    docker:
+      image: gradle:7.5.0-jdk17
+    env:
+      - ANDROID_COMPILE_SDK=34
+      - ANDROID_BUILD_TOOLS=34.0.0
+    stages:
+      - name: Checkout
+        type: git:clone
+        options:
+          depth: 1
+      - name: Setup Android SDK
+        script:
+          - apt-get update && apt-get install -y wget unzip
+          - wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          - unzip commandlinetools-linux-*.zip
+          - mkdir -p android-sdk/cmdline-tools
+          - mv cmdline-tools android-sdk/cmdline-tools/latest
+          - export ANDROID_SDK_ROOT=$PWD/android-sdk
+          - export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          - yes | sdkmanager --licenses >/dev/null 2>&1
+          - sdkmanager "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}"
+      - name: Grant execute permission for gradlew
+        script:
+          - chmod +x gradlew
+      - name: Build Debug APK
+        script:
+          - ./gradlew assembleDebug --stacktrace --no-daemon
+      - name: Upload APK
+        type: artifact:upload
+        options:
+          paths:
+            - app/build/outputs/apk/debug/*.apk
