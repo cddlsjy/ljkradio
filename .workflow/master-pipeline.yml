@@ -1,34 +1,33 @@
-name: Build Android APK
+version: '1.0'
+name: ljkradiosdk19 Pipeline # 流水线名称
+stages:
+  - stage: 
+      name: build_stage
+      displayName: 构建阶段
+      steps:
+        # 使用 build@shell 绕过 Gitee 的 Gradle 插件 bug
+        - step: build@shell
+          name: build_gradle
+          displayName: 执行 Gradle 构建
+          # 选择合适的 JDK 版本，Android 项目一般用 8 或 11
+          jdkVersion: 17# 或者 '11'，根据你的项目配置调整
+          
+          commands:
+            # 1. 给脚本授权
+            - chmod +x ./gradlew
+            
+            # 2. 执行构建，屏蔽 Gitee 干扰
+            #    如果是 Android 项目，通常是 assembleDebug 或 assembleRelease
+            - ./gradlew assembleDebug --no-daemon --no-init-script
+            
+            # 3. （可选）列出生成的 APK 文件位置，方便确认构建结果
+            - ls -la app/build/outputs/apk/debug/
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+          # （可选）如果需要上传产物，可以在这里配置 artifacts
+          artifacts:
+            - name: android-apk
+              paths:
+                - app/build/outputs/apk/debug/*.apk
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+# 注意：Gitee 不支持 GitHub Actions 那样的 jobs, runs-on, uses 等语法
+# 所有的配置都必须遵循上面的 stages -> stage -> steps -> step 结构
