@@ -1,37 +1,30 @@
+# Gitee CI 配置 - Android Gradle 项目
 version: '1.0'
 
-pipeline:
-  build:
-    name: Build Android APK
-    docker:
-      image: gradle:7.5.0-jdk17
-    env:
-      - ANDROID_COMPILE_SDK=34
-      - ANDROID_BUILD_TOOLS=34.0.0
-    stages:
-      - name: Checkout
-        type: git:clone
-        options:
-          depth: 1
-      - name: Setup Android SDK
-        script:
-          - apt-get update && apt-get install -y wget unzip
-          - wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          - unzip commandlinetools-linux-*.zip
-          - mkdir -p android-sdk/cmdline-tools
-          - mv cmdline-tools android-sdk/cmdline-tools/latest
-          - export ANDROID_SDK_ROOT=$PWD/android-sdk
-          - export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
-          - yes | sdkmanager --licenses >/dev/null 2>&1
-          - sdkmanager "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}"
-      - name: Grant execute permission for gradlew
-        script:
-          - chmod +x gradlew
-      - name: Build Debug APK
-        script:
-          - ./gradlew assembleDebug --stacktrace --no-daemon
-      - name: Upload APK
-        type: artifact:upload
-        options:
-          paths:
-            - app/build/outputs/apk/debug/*.apk
+# 使用 Gitee Go 的 Android 构建镜像
+image: registry.cn-hangzhou.aliyuncs.com/gitee-go/android:latest
+
+stages:
+  - build
+
+before_script:
+  # 赋予 gradlew 执行权限
+  - chmod +x ./gradlew
+  # 打印环境信息（可选）
+  - java -version
+  - ./gradlew --version
+
+build:
+  stage: build
+  script:
+    # 使用 gradlew 编译 Debug APK
+    - ./gradlew assembleDebug --stacktrace --no-daemon
+  artifacts:
+    paths:
+      # 收集编译产物（APK）
+      - app/build/outputs/apk/debug/*.apk
+    expire_in: 7 days
+  only:
+    - master
+    - develop
+    - tags
